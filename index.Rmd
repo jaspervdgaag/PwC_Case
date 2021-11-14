@@ -1,43 +1,164 @@
 ---
-title: "MyLabJournal"
-output: html_document
+title: "The first Data-Driven Taxi Company in New York"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: scroll
+    theme: yeti
+    source_code: embed
+runtime: shiny
 ---
 
-<style type="text/css">
-.title {
-  display: none;
-}
+```{r global, include=FALSE}
 
-#getting-started img {
-  margin-right: 10px;
-}
+library(flexdashboard)
+library(ggplot2)
+library(shiny)
+library(RColorBrewer)
+library(dplyr)
+library(DT)
+library(plotly)
 
-</style>
+sum_stat <- read.csv("/Users/jvdg/Documents/PWC Case/sum_stat2.csv")
+route <- read.csv("/Users/jvdg/Documents/PWC Case/route4.csv")
+```
 
-<div class="row" style="padding-top: 30px;">
-<div class="col-sm-6">
+Column {.sidebar data-width=250}
+-------------------------------------
 
-# **My Lab Journal**
+### Options 
+*********
+**Analysis Metrics**
+```{r}
+selectInput("selectInput1", "Group By", 
+            choices = c("Season", "Time of the Week", "Time of the Day", "Season and Time of the Week",
+                        "Season and Time of the Day", "Time of the Week and Time of the Day", 
+                        "Season, Time of the Week and Time of the Day"))
+selectInput("selectInput2", "Trip Length", 
+            choices = c("Minutes", "Miles"))
+selectInput("selectInput3", "Revenue", 
+            choices = c("Tips", "Gross", "Net"))
+```
 
-This is a template example for lab journaling. Students in Matt Crump's Human Cognition and Performance Lab will use this template to learn R, and other things. Students can replace this text with more fun things. People not in my lab can use this too.
 
-## How to use
+```{r}
+charts <- reactive({
+  sum_stat %>% filter(gb == input$selectInput1)%>%
+    filter(TL == input$selectInput2)%>%
+    filter(rev == input$selectInput3)
+})
+```
 
-1. fork the repo for this website and follow instructions on read me to get set up. [https://github.com/CrumpLab/LabJournalWebsite](https://github.com/CrumpLab/LabJournalWebsite)
+*********
+**Efficiency Tool**
+```{r}
+selectInput("selectInput4", "Season", 
+            choices = c("", unique(route$Season)))
+selectInput("selectInput5", "Time of the Week", 
+            choices = c("", unique(route$Week_Time)))
+selectInput("selectInput6", "Time of the Day", 
+            choices = c("", "Morning", "Afternoon", "Evening", "Night"))
+selectInput("selectInput7", "Current Zone", 
+            choices = c("", unique(route$Current_Zone)))
+selectInput("selectInput8", "Selection Metric", 
+            choices = c("Efficiency", "Profit"))
+```
+*********
 
-2. Blog/journal what you are doing in R, by editing the Journal.Rmd. See the [Journal page](https://crumplab.github.io/LabJournalWebsite/Journal.html) for an example of what to do to get started learning R.
+```{r}
+route1 <- reactive({
+  route %>% mutate(Selection = ifelse(Selection=="Total Profit", "Profit", Selection))%>%
+    mutate(total_duration = round((total_duration/60),digits=2))%>%
+    filter(Season == input$selectInput4)%>%
+    filter(Week_Time == input$selectInput5)%>%
+    filter(Day_Time == input$selectInput6)%>%
+    filter(Current_Zone == input$selectInput7)%>%
+    filter(Selection ==input$selectInput8)
+})
+```
 
-3. See the [links page](https://crumplab.github.io/LabJournalWebsite/Links.html) for lots of helpful links on learning R.
+Row {data-height=390}
+-------------------------------------
+### Average Daily Trips
+```{r}
+renderPlot({
+  ggplot(charts(), aes(x=reorder(gr, count), y=count, fill=gr))+
+  geom_bar(stat="identity", colour = "black") + geom_text(aes(label = paste(format(count, nsmall=0), "Trips")), 
+    position = position_stack(vjust= 0.5),
+    colour = "black", size = 4)+
+  theme_classic() +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        legend.position = "none",
+        axis.text.x = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text=element_text(size=10))+
+  coord_flip()
+})
+```
 
-4. Change everything to make it your own.
+### Average Trip Length
+```{r}
+renderPlot({
+  ggplot(charts(), aes(x=reorder(gr, trip_length), y=trip_length, fill=gr))+
+  geom_bar(stat="identity", colour = "black") + geom_text(aes(label = paste(format(trip_length, nsmall=0), input$selectInput2)), 
+    position = position_stack(vjust= 0.5),
+    colour = "black", size = 4)+
+  theme_classic() +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        legend.position = "none",
+        axis.text.x = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text=element_text(size=10))+
+  coord_flip()
+})
+```
 
+Row {data-height=390}
+-------------------------------------
 
-</div>
-<div class="col-sm-6">
+### Average Trip Revenue
+```{r}
+renderPlot({
+  ggplot(charts(), aes(x=reorder(gr, rev_metric), y=rev_metric, fill=gr))+
+  geom_bar(stat="identity", colour = "black") + geom_text(aes(label = paste0("$", format(rev_metric, nsmall=0))), 
+    position = position_stack(vjust= 0.5),
+    colour = "black", size = 4)+
+  theme_classic() +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        legend.position = "none",
+        axis.text.x = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text=element_text(size=10))+
+  coord_flip()
+})
+```
 
-### [Crump Lab: Human Cognition and Performance](https://crumplab.github.io)
+### Average Trip Efficiency
+```{r}
+renderPlot({
+  ggplot(charts(), aes(x=reorder(gr, efficiency), y=efficiency, fill=gr))+
+  geom_bar(stat="identity", colour = "black") + geom_text(aes(label = paste(format(efficiency, nsmall=0),"$/min")), 
+    position = position_stack(vjust= 0.5),
+    colour = "black", size = 4)+
+  theme_classic() +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        legend.position = "none",
+        axis.text.x = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text=element_text(size=10))+
+  coord_flip()
+})
+```
 
-<a href = "https://crumplab.github.io">
-![](images/logo.png)
-</a>
-</div>
+Row {data-height=220}
+-------------------------------------
+### Efficiency Tool
+```{r}
+renderDataTable({datatable(route1()[,c(9,22,19,20,21,17,18)], class = 'cell-border stripe', options = list(pageLength = 5), 
+                           colnames = c("Next Zone", "Efficiency ($/min)", "Net Revenue ($)", "Gas Costs ($)", "Profit ($)", "Total Duration (min)", "Total Distance (mi)"))})
+```
+
